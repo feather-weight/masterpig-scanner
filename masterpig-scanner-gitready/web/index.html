@@ -1,0 +1,92 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MasterPig Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { padding: 1rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(280px,1fr)); gap: 1rem; }
+    canvas { background: #fff; border-radius: 12px; padding: .5rem; }
+    .stat { background: #fff; border-radius: 12px; padding: 1rem; }
+  </style>
+</head>
+<body>
+  <h2>MasterPig Scanner</h2>
+  <div class="grid">
+    <div class="stat">
+      <h4>Recent Usage</h4>
+      <ul id="recent-list"></ul>
+    </div>
+    <div class="stat">
+      <h4>Thresholds (addresses with tx count &gt; N)</h4>
+      <ul id="thresholds-list"></ul>
+    </div>
+    <div>
+      <canvas id="bucketChart"></canvas>
+    </div>
+  </div>
+
+  <script>
+    async function fetchMetrics(){
+      const r = await fetch('/metrics');
+      return await r.json();
+    }
+
+    function updateRecent(list, recent){
+      list.innerHTML = '';
+      for(const [k,v] of Object.entries(recent)){
+        const li = document.createElement('li');
+        li.textContent = `${k}: active=${v.active ?? v} with_balance=${v.with_balance ?? 0}`;
+        list.appendChild(li);
+      }
+    }
+
+    function updateThresholds(list, thr){
+      list.innerHTML = '';
+      Object.keys(thr).sort((a,b)=>{
+        const na = parseInt(a.split('_')[1]); const nb = parseInt(b.split('_')[1]);
+        return na - nb;
+      }).forEach(k=>{
+        const li = document.createElement('li');
+        li.textContent = `${k.replace('gt_','> ')}: ${thr[k]}`;
+        list.appendChild(li);
+      });
+    }
+
+    let chart;
+    function updateBucketsChart(ctx, buckets){
+      const labels = [];
+      const data = [];
+      const grans = ['minute','hour','day','week','month','year'];
+      grans.forEach(g=>{
+        if(buckets[g]){
+          labels.push(g);
+          data.push(buckets[g].addresses_scanned ?? 0);
+        }
+      });
+      if(chart){ chart.destroy(); }
+      chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels, datasets: [{ label: 'Addresses scanned (latest bucket)', data }]
+        },
+        options: { responsive: true, plugins: { legend: { display: true } } }
+      });
+    }
+
+    async function loop(){
+      try{
+        const m = await fetchMetrics();
+        updateRecent(document.getElementById('recent-list'), m.recent_usage || {});
+        updateThresholds(document.getElementById('thresholds-list'), m.thresholds || {});
+        updateBucketsChart(document.getElementById('bucketChart'), m.buckets || {});
+      }catch(e){ console.error(e); }
+      setTimeout(loop, 5000);
+    }
+    loop();
+  </script>
+</body>
+</html>

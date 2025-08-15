@@ -1,0 +1,9 @@
+# Replace with your email for Let's Encrypt
+{
+    email you@example.com
+}
+
+masterpig.donthink.so {
+    encode zstd gzip
+    reverse_proxy api:8080
+}

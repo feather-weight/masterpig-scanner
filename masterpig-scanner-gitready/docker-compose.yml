@@ -1,0 +1,33 @@
+version: "3.9"
+services:
+  api:
+    build: .
+    env_file: .env
+    expose:
+      - "8080"
+    depends_on:
+      - mongo
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+volumes:
+  mongo_data:
+  caddy_data:
+  caddy_config:
