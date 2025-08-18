@@ -1,20 +1,25 @@
+# app/db.py
+import os
+from functools import lru_cache
 from motor.motor_asyncio import AsyncIOMotorClient
-from .config import settings
 
-_client = None
-_db = None
+MONGO_URI = os.getenv("MONGO_URI", "").strip()
+MONGO_DB  = os.getenv("MONGO_DB", "MasterPig").strip()
+
+_client: AsyncIOMotorClient | None = None
 
 async def get_db():
-    global _client, _db
-    if _db:
-        return _db
-    if not settings.mongo_uri:
+    """
+    Returns an async Motor database or None if MONGO_URI is not set or not reachable.
+    """
+    global _client
+    if not MONGO_URI:
         return None
-    _client = AsyncIOMotorClient(settings.mongo_uri, uuidRepresentation="standard")
-    _db = _client[settings.mongo_db]
-    # indices
-    await _db.addresses.create_index("address", unique=True)
-    await _db.addresses.create_index([("tx_count", 1), ("last_seen", -1)])
-    await _db.edges.create_index([("src", 1), ("dst", 1)], unique=True)
-    await _db.stats.create_index("bucket")
-    return _db
+    if _client is None:
+        _client = AsyncIOMotorClient(MONGO_URI, serverSelectionTimeoutMS=2000)
+    try:
+        # quick connectivity check
+        await _client.admin.command("ping")
+    except Exception:
+        return None
+    return _client[MONGO_DB]

@@ -8,5 +8,5 @@ uvicorn
 orjson
 pydantic
 uvicorn[standard]
-
+motor
 jinja2
