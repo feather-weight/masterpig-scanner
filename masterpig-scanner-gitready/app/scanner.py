@@ -79,15 +79,28 @@ class Scanner:
                     return
                 seen.add(addr)
 
-                async with sem:
-                    txs = await tatum.address_txs(addr) or []
+                async def get_txs():
+                    async with sem:
+                        return await tatum.address_txs(addr) or []
+
+                async def get_balance():
+                    async with sem:
+                        return await tatum.address_balance(addr)
+
+                txs, balance_resp = await asyncio.gather(
+                    get_txs(), get_balance(), return_exceptions=True
+                )
+                if isinstance(txs, Exception):
+                    txs = []
+                if isinstance(balance_resp, Exception):
+                    balance_resp = None
                 tx_count = len(txs)
-                balance_resp = await tatum.address_balance(addr)
                 balance = None
                 if isinstance(balance_resp, dict):
                     # Tatum returns {"incoming": "...","outgoing": "...","balance": "..."}
                     try:
-                        balance = int(float(balance_resp.get("balance", "0"))*1e8) if isinstance(balance_resp.get("balance"), str) else int(balance_resp.get("balance", 0))
+                        raw_balance = balance_resp.get("balance", "0")
+                        balance = int(float(raw_balance) * 1e8) if isinstance(raw_balance, str) else int(raw_balance)
                     except Exception:
                         balance = 0
 
@@ -107,16 +120,22 @@ class Scanner:
                 # Deep follow: pull peer addresses from Blockchair per-tx (limited fanout)
                 if depth < self.follow_depth and tx_count > 0:
                     # We will query up to first 3 transactions for peers to limit API load
+                    async def get_detail(tx_hash: str):
+                        async with sem:
+                            return await blockchair.tx_details(tx_hash)
+
+                    detail_tasks = []
                     for tx in txs[:3]:
                         tx_hash = tx.get("hash") or tx.get("txHash") or tx.get("txid") or tx.get("id")
-                        if not tx_hash:
-                            continue
-                        async with sem:
-                            detail = await blockchair.tx_details(tx_hash)
-                        if not detail:
+                        if tx_hash:
+                            detail_tasks.append(get_detail(tx_hash))
+
+                    details = await asyncio.gather(*detail_tasks, return_exceptions=True)
+                    for detail in details:
+                        if isinstance(detail, Exception) or not detail:
                             continue
                         peers = blockchair.extract_peer_addresses(detail, addr, limit=self.max_peers_per_tx)
-                        await asyncio.gather(*(fetch_and_follow(p, depth+1) for p in peers))
+                        await asyncio.gather(*(fetch_and_follow(p, depth + 1) for p in peers))
 
             # Kick off gap-limit derivation for both chains
             tasks = []

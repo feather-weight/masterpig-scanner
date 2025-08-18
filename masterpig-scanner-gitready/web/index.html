@@ -17,6 +17,10 @@
   <h2>MasterPig Scanner</h2>
   <div class="grid">
     <div class="stat">
+      <h4>Scan Stats</h4>
+      <ul id="stats-list"></ul>
+    </div>
+    <div class="stat">
       <h4>Recent Usage</h4>
       <ul id="recent-list"></ul>
     </div>
@@ -32,6 +36,11 @@
   <script>
     async function fetchMetrics(){
       const r = await fetch('/metrics');
+      return await r.json();
+    }
+
+    async function fetchStats(){
+      const r = await fetch('/stats');
       return await r.json();
     }
 
@@ -54,6 +63,15 @@
         li.textContent = `${k.replace('gt_','> ')}: ${thr[k]}`;
         list.appendChild(li);
       });
+    }
+
+    function updateStats(list, stats){
+      list.innerHTML = '';
+      for(const [k,v] of Object.entries(stats)){
+        const li = document.createElement('li');
+        li.textContent = `${k}: ${v}`;
+        list.appendChild(li);
+      }
     }
 
     let chart;
@@ -79,10 +97,11 @@
 
     async function loop(){
       try{
-        const m = await fetchMetrics();
+        const [m, s] = await Promise.all([fetchMetrics(), fetchStats()]);
         updateRecent(document.getElementById('recent-list'), m.recent_usage || {});
         updateThresholds(document.getElementById('thresholds-list'), m.thresholds || {});
         updateBucketsChart(document.getElementById('bucketChart'), m.buckets || {});
+        updateStats(document.getElementById('stats-list'), s || {});
       }catch(e){ console.error(e); }
       setTimeout(loop, 5000);
     }
