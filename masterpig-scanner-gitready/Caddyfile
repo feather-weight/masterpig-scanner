@@ -1,9 +1,54 @@
-# Replace with your email for Let's Encrypt
 {
-    email you@example.com
+	# email for ACME notices
+	email imgreat@dark.sex
+	# optional global headers
+	# servers :443 {
+	#   protocols h1 h2 h3
+	# }
 }
 
-masterpig.donthink.so {
-    encode zstd gzip
-    reverse_proxy api:8080
+# --- Landing site (static) ---
+dark.sex, www.dark.sex {
+	encode zstd gzip
+	root * /srv/www
+	file_server
+
+	@assets {
+		path *.css *.js *.png *.jpg *.svg *.ico *.webp *.woff *.woff2
+	}
+	header {
+		# security-ish defaults (tweak as needed)
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer-when-downgrade"
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		# Simple CSP – relax if you add external assets
+		Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self';"
+	}
+
+	# redirect www → apex if you prefer a single canonical host
+	@www host www.dark.sex
+	redir @www https://dark.sex{uri} permanent
 }
+
+# --- App/service (reverse proxy) ---
+masterpig.dark.sex, www.masterpig.dark.sex {
+	encode zstd gzip
+	route {
+		# health
+		respond /health 200
+		# proxy to your app container
+		reverse_proxy app:3000
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer-when-downgrade"
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+	}
+	# optional: canonicalize to non-www
+	@www host www.masterpig.dark.sex
+	redir @www https://masterpig.dark.sex{uri} permanent
+}
+

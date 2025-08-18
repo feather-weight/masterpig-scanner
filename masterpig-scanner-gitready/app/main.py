@@ -1,12 +1,25 @@
 from fastapi import FastAPI, BackgroundTasks
-from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
+from pathlib import Path
+from fastapi.responses import JSONResponse, HTMLResponse, FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 import asyncio, time
 from .scanner import Scanner, THRESHOLDS
 from .db import get_db
 
-app = FastAPI(title="MasterPig Scanner")
-app.mount("/static", StaticFiles(directory="web/static"), name="static")
+@app.get("/health", response_class=PlainTextResponse)
+def health():
+    return "ok"
+
+app = FastAPI()
+
+# Resolve absolute paths inside the container (WORKDIR=/app)
+BASE_DIR = Path(__file__).resolve().parent.parent     # /app
+WEB_DIR = BASE_DIR / "web"                            # /app/web
+STATIC_DIR = WEB_DIR / "static"                       # /app/web/static
+
+# Only mount /static if the directory exists
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 scanner: Scanner | None = None
 scan_task: asyncio.Task | None = None
@@ -113,6 +126,10 @@ async def metrics():
 
     return result
 
+@app.get("/health", response_class=PlainTextResponse)
+async def health():
+    return "ok"
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    return (open("web/index.html","r").read())
+    return FileResponse(WEB_DIR / "index.html")
