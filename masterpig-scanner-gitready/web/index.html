@@ -5,13 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MasterPig Dashboard</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    body { padding: 1rem; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(280px,1fr)); gap: 1rem; }
-    canvas { background: #fff; border-radius: 12px; padding: .5rem; }
-    .stat { background: #fff; border-radius: 12px; padding: 1rem; }
-  </style>
 </head>
 <body>
   <h2>MasterPig Scanner</h2>
@@ -34,6 +29,9 @@
   </div>
 
   <script>
+    Chart.defaults.color = '#999';
+    Chart.defaults.font.family = 'Courier New, monospace';
+
     async function fetchMetrics(){
       const r = await fetch('/metrics');
       return await r.json();
@@ -89,9 +87,22 @@
       chart = new Chart(ctx, {
         type: 'bar',
         data: {
-          labels, datasets: [{ label: 'Addresses scanned (latest bucket)', data }]
+          labels,
+          datasets: [{
+            label: 'Addresses scanned (latest bucket)',
+            data,
+            backgroundColor: '#cc33cc',
+            borderColor: '#cc33cc'
+          }]
         },
-        options: { responsive: true, plugins: { legend: { display: true } } }
+        options: {
+          responsive: true,
+          plugins: { legend: { display: true } },
+          scales: {
+            x: { ticks: { color: '#999' }, grid: { color: 'rgba(204,51,204,0.3)' } },
+            y: { ticks: { color: '#999' }, grid: { color: 'rgba(204,51,204,0.3)' } }
+          }
+        }
       });
     }
 
@@ -105,7 +116,20 @@
       }catch(e){ console.error(e); }
       setTimeout(loop, 5000);
     }
-    loop();
+    function typeWriter(el, text, i=0){
+      if(i < text.length){
+        el.textContent += text.charAt(i);
+        setTimeout(()=>typeWriter(el, text, i+1), 100);
+      }
+    }
+
+    window.addEventListener('load', () => {
+      const title = document.querySelector('h2');
+      const txt = title.textContent;
+      title.textContent = '';
+      typeWriter(title, txt);
+      loop();
+    });
   </script>
 </body>
 </html>

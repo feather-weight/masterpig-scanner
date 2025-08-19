@@ -1,0 +1,334 @@
+ diff --git a/masterpig-scanner-gitready/web/index.html b/masterpig-scanner-gitready/web/index.html
+index 4574c7cf974cb1773031c95fa30f93df05cd59fd..6d0a45f8f3c529109f16aad36203f4247676b5db 100644
+--- a/masterpig-scanner-gitready/web/index.html
++++ b/masterpig-scanner-gitready/web/index.html
+@@ -1,92 +1,116 @@
+ <!doctype html>
+ <html>
+ <head>
+   <meta charset="utf-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1">
+   <title>MasterPig Dashboard</title>
+   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
++  <link rel="stylesheet" href="styles.css">
+   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+-  <style>
+-    body { padding: 1rem; }
+-    .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(280px,1fr)); gap: 1rem; }
+-    canvas { background: #fff; border-radius: 12px; padding: .5rem; }
+-    .stat { background: #fff; border-radius: 12px; padding: 1rem; }
+-  </style>
+ </head>
+ <body>
+   <h2>MasterPig Scanner</h2>
+   <div class="grid">
+     <div class="stat">
+       <h4>Recent Usage</h4>
+       <ul id="recent-list"></ul>
+     </div>
+     <div class="stat">
+       <h4>Thresholds (addresses with tx count &gt; N)</h4>
+       <ul id="thresholds-list"></ul>
+     </div>
+     <div>
+       <canvas id="bucketChart"></canvas>
+     </div>
+   </div>
+
+   <script>
++    Chart.defaults.color = '#999';
++    Chart.defaults.font.family = 'Courier New, monospace';
++
+     async function fetchMetrics(){
+       const r = await fetch('/metrics');
+       return await r.json();
+     }
+
+     function updateRecent(list, recent){
+       list.innerHTML = '';
+       for(const [k,v] of Object.entries(recent)){
+         const li = document.createElement('li');
+         li.textContent = `${k}: active=${v.active ?? v} with_balance=${v.with_balance ?? 0}`;
+         list.appendChild(li);
+       }
+     }
+
+     function updateThresholds(list, thr){
+       list.innerHTML = '';
+       Object.keys(thr).sort((a,b)=>{
+         const na = parseInt(a.split('_')[1]); const nb = parseInt(b.split('_')[1]);
+         return na - nb;
+       }).forEach(k=>{
+         const li = document.createElement('li');
+         li.textContent = `${k.replace('gt_','> ')}: ${thr[k]}`;
+         list.appendChild(li);
+       });
+     }
+
+     let chart;
+     function updateBucketsChart(ctx, buckets){
+       const labels = [];
+       const data = [];
+       const grans = ['minute','hour','day','week','month','year'];
+       grans.forEach(g=>{
+         if(buckets[g]){
+           labels.push(g);
+           data.push(buckets[g].addresses_scanned ?? 0);
+         }
+       });
+       if(chart){ chart.destroy(); }
+       chart = new Chart(ctx, {
+         type: 'bar',
+         data: {
+-          labels, datasets: [{ label: 'Addresses scanned (latest bucket)', data }]
++          labels,
++          datasets: [{
++            label: 'Addresses scanned (latest bucket)',
++            data,
++            backgroundColor: '#cc33cc',
++            borderColor: '#cc33cc'
++          }]
+         },
+-        options: { responsive: true, plugins: { legend: { display: true } } }
++        options: {
++          responsive: true,
++          plugins: { legend: { display: true } },
++          scales: {
++            x: { ticks: { color: '#999' }, grid: { color: 'rgba(204,51,204,0.3)' } },
++            y: { ticks: { color: '#999' }, grid: { color: 'rgba(204,51,204,0.3)' } }
++          }
++        }
+       });
+     }
+
+     async function loop(){
+       try{
+         const m = await fetchMetrics();
+         updateRecent(document.getElementById('recent-list'), m.recent_usage || {});
+         updateThresholds(document.getElementById('thresholds-list'), m.thresholds || {});
+         updateBucketsChart(document.getElementById('bucketChart'), m.buckets || {});
+       }catch(e){ console.error(e); }
+       setTimeout(loop, 5000);
+     }
+-    loop();
++    function typeWriter(el, text, i=0){
++      if(i < text.length){
++        el.textContent += text.charAt(i);
++        setTimeout(()=>typeWriter(el, text, i+1), 100);
++      }
++    }
++
++    window.addEventListener('load', () => {
++      const title = document.querySelector('h2');
++      const txt = title.textContent;
++      title.textContent = '';
++      typeWriter(title, txt);
++      loop();
++    });
+   </script>
+ </body>
+ </html>
+diff --git a/masterpig-scanner-gitready/web/styles.css b/masterpig-scanner-gitready/web/styles.css
+new file mode 100644
+index 0000000000000000000000000000000000000000..90a34e3777bb8fcd7aad8f98ebfb1965c33702d8
+--- /dev/null
++++ b/masterpig-scanner-gitready/web/styles.css
+@@ -0,0 +1,109 @@
++body {
++  background: #000;
++  color: #999;
++  font-family: "Courier New", monospace;
++  padding: 1rem;
++}
++body h2 {
++  color: #cc33cc;
++  animation: glow 2s ease-in-out infinite alternate;
++}
++body h4 {
++  color: #cc33cc;
++}
++
++.grid {
++  display: grid;
++  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
++  gap: 1rem;
++}
++
++.stat {
++  background: rgba(255, 255, 255, 0.03);
++  border: 1px solid #cc33cc;
++  border-radius: 12px;
++  padding: 1rem;
++  box-shadow: 0 0 10px rgba(204, 51, 204, 0.5);
++  transition: transform 0.3s, box-shadow 0.3s;
++}
++.stat:hover {
++  transform: translateY(-5px) scale(1.02);
++  box-shadow: 0 0 20px #cc33cc;
++}
++
++canvas {
++  background: rgba(255, 255, 255, 0.03);
++  border: 1px solid #cc33cc;
++  border-radius: 12px;
++  padding: 0.5rem;
++  box-shadow: 0 0 10px rgba(204, 51, 204, 0.5);
++  transition: transform 0.3s, box-shadow 0.3s;
++  background: transparent;
++}
++canvas:hover {
++  transform: translateY(-5px) scale(1.02);
++  box-shadow: 0 0 20px #cc33cc;
++}
++
++ul {
++  list-style: none;
++  padding: 0;
++}
++ul li {
++  color: #3399cc;
++  margin: 0.25rem 0;
++  font-family: "Courier New", monospace;
++  opacity: 0;
++  animation: slide-in 0.5s forwards;
++}
++ul li:nth-child(1) {
++  animation-delay: 0.1s;
++}
++ul li:nth-child(2) {
++  animation-delay: 0.2s;
++}
++ul li:nth-child(3) {
++  animation-delay: 0.3s;
++}
++ul li:nth-child(4) {
++  animation-delay: 0.4s;
++}
++ul li:nth-child(5) {
++  animation-delay: 0.5s;
++}
++ul li:nth-child(6) {
++  animation-delay: 0.6s;
++}
++ul li:nth-child(7) {
++  animation-delay: 0.7s;
++}
++ul li:nth-child(8) {
++  animation-delay: 0.8s;
++}
++ul li:nth-child(9) {
++  animation-delay: 0.9s;
++}
++ul li:nth-child(10) {
++  animation-delay: 1s;
++}
++
++@keyframes glow {
++  from {
++    text-shadow: 0 0 10px rgba(204, 51, 204, 0.5);
++  }
++  to {
++    text-shadow: 0 0 20px #cc33cc;
++  }
++}
++@keyframes slide-in {
++  from {
++    transform: translateX(-20px);
++    opacity: 0;
++  }
++  to {
++    transform: translateX(0);
++    opacity: 1;
++  }
++}
++
++/*# sourceMappingURL=styles.css.map */
+diff --git a/masterpig-scanner-gitready/web/styles.css.map b/masterpig-scanner-gitready/web/styles.css.map
+new file mode 100644
+index 0000000000000000000000000000000000000000..7cbc92a975a51fb38abe147832dba0262cc4ffad
+--- /dev/null
++++ b/masterpig-scanner-gitready/web/styles.css.map
+@@ -0,0 +1 @@
++{"version":3,"sourceRoot":"","sources":["styles.scss"],"names":[],"mappings":"AAqBA;EACE,YAtBG;EAuBH,OAtBK;EAuBL;EACA;;AAEA;EACE,OA1BQ;EA2BR;;AAGF;EACE,OA/BQ;;;AAmCZ;EACE;EACA;EACA;;;AAGF;EAlCE,YAJQ;EAKR;EACA;EACA,SAJmB;EAKnB;EACA;;AACA;EACE;EACA;;;AA4BJ;EApCE,YAJQ;EAKR;EACA;EACA,SAiCoB;EAhCpB;EACA;EA+B4B;;AA9B5B;EACE;EACA;;;AA8BJ;EACE;EACA;;AAEA;EACE,OAjDO;EAkDP;EACA;EACA;EACA;;AAIA;EAAqB;;AAArB;EAAqB;;AAArB;EAAqB;;AAArB;EAAqB;;AAArB;EAAqB;;AAArB;EAAqB;;AAArB;EAAqB;;AAArB;EAAqB;;AAArB;EAAqB;;AAArB;EAAqB;;;AAIzB;EACE;IAAM;;EACN;IAAI;;;AAGN;EACE;IAAM;IAA8B;;EACpC;IAAI;IAA0B","file":"styles.css"}
+\ No newline at end of file
+diff --git a/masterpig-scanner-gitready/web/styles.scss b/masterpig-scanner-gitready/web/styles.scss
+new file mode 100644
+index 0000000000000000000000000000000000000000..20c95dfbdfb94ad4a2c3489d82d08134521b88d6
+--- /dev/null
++++ b/masterpig-scanner-gitready/web/styles.scss
+@@ -0,0 +1,74 @@
++$bg: #000;
++$font: #999;
++$highlight: #cc33cc;
++$terminal: #3399cc;
++
++$card-bg: rgba(255,255,255,0.03);
++$transition: 0.3s;
++
++@mixin card($padding:1rem){
++  background: $card-bg;
++  border: 1px solid $highlight;
++  border-radius: 12px;
++  padding: $padding;
++  box-shadow: 0 0 10px rgba($highlight,0.5);
++  transition: transform $transition, box-shadow $transition;
++  &:hover{
++    transform: translateY(-5px) scale(1.02);
++    box-shadow: 0 0 20px $highlight;
++  }
++}
++
++body{
++  background: $bg;
++  color: $font;
++  font-family: 'Courier New', monospace;
++  padding: 1rem;
++
++  h2{
++    color: $highlight;
++    animation: glow 2s ease-in-out infinite alternate;
++  }
++
++  h4{
++    color: $highlight;
++  }
++}
++
++.grid{
++  display: grid;
++  grid-template-columns: repeat(auto-fit,minmax(280px,1fr));
++  gap: 1rem;
++}
++
++.stat{ @include card(); }
++
++canvas{ @include card(.5rem); background: transparent; }
++
++ul{
++  list-style: none;
++  padding: 0;
++
++  li{
++    color: $terminal;
++    margin: .25rem 0;
++    font-family: 'Courier New', monospace;
++    opacity: 0;
++    animation: slide-in .5s forwards;
++  }
++
++  @for $i from 1 through 10{
++    li:nth-child(#{$i}){ animation-delay: $i * 0.1s; }
++  }
++}
++
++@keyframes glow{
++  from{ text-shadow: 0 0 10px rgba($highlight,0.5); }
++  to{ text-shadow: 0 0 20px $highlight; }
++}
++
++@keyframes slide-in{
++  from{ transform: translateX(-20px); opacity:0; }
++  to{ transform: translateX(0); opacity:1; }
++}
++
+q
